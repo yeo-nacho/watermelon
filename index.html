@@ -2,38 +2,128 @@
 <html lang="ko">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <!-- 1. 브라우저 탭 제목 수정 -->
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no">
     <title>연아의 수박게임</title>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link href="https://fonts.googleapis.com/css2?family=Mooli&display=swap" rel="stylesheet">
     <style>
-        body { display: flex; justify-content: center; align-items: center; flex-direction: column; height: 100vh; margin: 0; background: linear-gradient(to top, #a1c4fd 0%, #c2e9fb 100%); font-family: 'Mooli', sans-serif; overflow: hidden; }
-        h1 { font-size: 3em; color: #fff; text-shadow: 2px 2px 4px rgba(0,0,0,0.3); }
-        #game-container { position: relative; border: 10px solid #8B4513; border-radius: 20px; box-shadow: 0 10px 20px rgba(0,0,0,0.3); }
-        canvas { border-radius: 10px; display: block; }
-        #score { position: absolute; top: 15px; left: 20px; font-size: 28px; font-weight: bold; color: #fff; text-shadow: 2px 2px 3px #555; z-index: 10; }
-        #mute-button { position: absolute; top: 20px; right: 20px; width: 40px; height: 40px; font-size: 24px; background: rgba(255, 255, 255, 0.5); border: none; border-radius: 50%; cursor: pointer; z-index: 10; transition: background-color 0.2s; }
-        #mute-button:hover { background: rgba(255, 255, 255, 0.8); }
-        #game-over-screen { position: absolute; top: 0; left: 0; width: 100%; height: 100%; background-color: rgba(0, 0, 0, 0.5); display: none; justify-content: center; align-items: center; flex-direction: column; z-index: 15; }
-        #game-over-text { font-size: 48px; font-weight: bold; color: white; margin-bottom: 20px; }
-        #restart-button { padding: 15px 30px; font-size: 24px; font-family: 'Mooli', sans-serif; font-weight: bold; color: #4B0082; background-color: #fff; border: 3px solid #ddd; border-radius: 10px; cursor: pointer; transition: background-color 0.2s, transform 0.2s; }
-        #restart-button:hover { background-color: #f0f0f0; transform: scale(1.05); }
+        /* 기본 페이지 및 폰트 설정 */
+        body {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            height: 100vh;
+            margin: 0;
+            background: linear-gradient(to top, #a1c4fd 0%, #c2e9fb 100%);
+            font-family: 'Mooli', sans-serif;
+            overflow: hidden;
+        }
+
+        h1 {
+            font-size: 3em;
+            color: #fff;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+        }
+
+        /* 반응형 스케일링을 위한 래퍼 */
+        #game-wrapper {
+            display: flex;
+            justify-content: center;
+            align-items: center;
+        }
+
+        /* 게임의 모든 요소가 담기는 메인 컨테이너 */
+        #game-container { 
+            position: relative; 
+            border: 10px solid #8B4513; 
+            border-radius: 20px; 
+            box-shadow: 0 10px 20px rgba(0,0,0,0.3);
+            transform-origin: top center; /* 스케일링 기준점 */
+        }
+
+        canvas {
+            border-radius: 10px;
+            display: block; /* 캔버스 아래 작은 여백 제거 */
+        }
+
+        /* 게임 내 UI 요소 스타일 */
+        #score {
+            position: absolute;
+            top: 15px;
+            left: 20px;
+            font-size: 28px;
+            font-weight: bold;
+            color: #fff;
+            text-shadow: 2px 2px 3px #555;
+            z-index: 10;
+        }
+
+        #mute-button {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 40px;
+            height: 40px;
+            font-size: 24px;
+            background: rgba(255, 255, 255, 0.5);
+            border: none;
+            border-radius: 50%;
+            cursor: pointer;
+            z-index: 10;
+        }
+
+        /* 게임 오버 화면 */
+        #game-over-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background-color: rgba(0, 0, 0, 0.5);
+            display: none; /* 평소에는 숨김 */
+            justify-content: center;
+            align-items: center;
+            flex-direction: column;
+            z-index: 15;
+            border-radius: 10px;
+        }
+
+        #game-over-text {
+            font-size: 48px;
+            font-weight: bold;
+            color: white;
+            margin-bottom: 20px;
+        }
+
+        #restart-button {
+            padding: 15px 30px;
+            font-size: 24px;
+            font-family: 'Mooli', sans-serif;
+            font-weight: bold;
+            color: #4B0082;
+            background-color: #fff;
+            border: 3px solid #ddd;
+            border-radius: 10px;
+            cursor: pointer;
+        }
     </style>
 </head>
 <body>
     <audio id="bgm" loop src="music/bgm.mp3"></audio>
 
-    <!-- 2. 화면 제목 수정 -->
     <h1>연아의 수박게임</h1>
-    <div id="game-container">
-        <canvas id="game-canvas"></canvas>
-        <div id="score">점수: 0</div>
-        <button id="mute-button">🔇</button>
-        <div id="game-over-screen">
-            <div id="game-over-text">게임 오버</div>
-            <button id="restart-button">다시 시작하기</button>
+
+    <div id="game-wrapper">
+        <div id="game-container">
+            <canvas id="game-canvas"></canvas>
+            <div id="score">점수: 0</div>
+            <button id="mute-button">🔇</button>
+            <div id="game-over-screen">
+                <div id="game-over-text">게임 오버</div>
+                <button id="restart-button">다시 시작하기</button>
+            </div>
         </div>
     </div>
 
@@ -55,7 +145,8 @@
         // --------------------------------------------------
         class SuikaGame {
             constructor() {
-                // DOM 요소 가져오기
+                // DOM 요소
+                this.container = document.getElementById('game-container');
                 this.canvas = document.getElementById('game-canvas');
                 this.scoreElement = document.getElementById('score');
                 this.gameOverScreen = document.getElementById('game-over-screen');
@@ -63,20 +154,16 @@
                 this.bgm = document.getElementById('bgm');
                 this.muteButton = document.getElementById('mute-button');
                 
-                // 게임 상태 초기화
-                this.engine = null;
-                this.world = null;
-                this.render = null;
-                this.runner = null;
-                this.score = 0;
-                this.currentFruit = null;
-                this.disableAction = false;
-                this.gameOver = false;
-                this.isMusicStarted = false;
+                // 게임 상태
+                this.engine = null; this.world = null; this.render = null; this.runner = null;
+                this.score = 0; this.currentFruit = null; this.disableAction = false;
+                this.gameOver = false; this.isMusicStarted = false; this.scale = 1;
                 this.loadedImages = [];
             }
 
-            // 게임 초기화 (이미지 로딩)
+            /**
+             * 게임 공개 진입점: 이미지 로딩 후 게임 시작
+             */
             init() {
                 let loadedCount = 0;
                 FRUITS_DATA.forEach((fruit, index) => {
@@ -95,7 +182,9 @@
                 });
             }
             
-            // 실제 게임 시작 설정
+            /**
+             * 실제 게임 시작 로직 (내부용)
+             */
             _startGame() {
                 this.engine = Engine.create();
                 this.world = this.engine.world;
@@ -114,52 +203,70 @@
                 
                 this._addEventListeners();
                 this._addNewIndicatorFruit();
+                this._resizeGame();
             }
 
-            // 게임 재시작
+            /**
+             * 게임 재시작 로직 (내부용)
+             */
             _restartGame() {
                 Runner.stop(this.runner);
                 Render.stop(this.render);
                 World.clear(this.world);
                 Engine.clear(this.engine);
 
-                this.score = 0;
-                this.gameOver = false;
-                this.disableAction = false;
-                this.currentFruit = null;
-
+                this.score = 0; this.gameOver = false; this.disableAction = false; this.currentFruit = null;
                 this._updateScore();
                 this.gameOverScreen.style.display = 'none';
 
                 this._startGame();
             }
 
-            // 모든 이벤트 리스너 통합 관리
+            /**
+             * 모든 이벤트 리스너 통합 관리 (내부용)
+             */
             _addEventListeners() {
+                window.onresize = () => this._resizeGame();
                 this.restartButton.onclick = () => this._restartGame();
                 this.muteButton.onclick = () => {
                     this.bgm.muted = !this.bgm.muted;
                     this.muteButton.textContent = this.bgm.muted ? '🔇' : '🎵';
                 };
                 
-                this.canvas.onclick = () => { if (!this.gameOver) this._dropCurrentFruit(); };
-                this.canvas.onmousemove = (event) => {
+                const handleMove = (event) => {
                     if (!this.currentFruit || !this.currentFruit.isSleeping || this.gameOver) return;
+                    const clientX = event.type.includes('touch') ? event.touches[0].clientX : event.clientX;
                     const bounds = this.canvas.getBoundingClientRect();
+                    const correctedX = (clientX - bounds.left) / this.scale;
                     const fruitData = FRUITS_DATA[this.currentFruit.level];
                     const newX = Math.max(
                         WALL_THICKNESS + fruitData.radius,
-                        Math.min(event.clientX - bounds.left, WIDTH - WALL_THICKNESS - fruitData.radius)
+                        Math.min(correctedX, WIDTH - WALL_THICKNESS - fruitData.radius)
                     );
                     Body.setPosition(this.currentFruit, { x: newX, y: this.currentFruit.position.y });
                 };
+                this.canvas.onclick = () => { if (!this.gameOver) this._dropCurrentFruit(); };
+                this.canvas.onmousemove = handleMove;
+                this.canvas.ontouchmove = handleMove;
 
                 Events.on(this.engine, 'collisionStart', (event) => this._handleCollision(event));
                 Events.on(this.engine, 'beforeUpdate', () => this._checkGameOver());
                 Events.on(this.render, 'afterRender', () => this._drawCustomElements());
             }
 
-            // 충돌 처리
+            /**
+             * 반응형 디자인을 위한 게임 크기 조절 (내부용)
+             */
+            _resizeGame() {
+                const wrapper = document.getElementById('game-wrapper');
+                const scale = Math.min(wrapper.clientWidth / WIDTH, wrapper.clientHeight / HEIGHT);
+                this.scale = scale;
+                this.container.style.transform = `scale(${scale})`;
+            }
+
+            /**
+             * 충돌 처리 로직 (내부용)
+             */
             _handleCollision(event) {
                 event.pairs.forEach((pair) => {
                     const { bodyA, bodyB } = pair;
@@ -168,7 +275,6 @@
                         if (currentLevel >= FRUITS_DATA.length - 1 || !this.world.bodies.includes(bodyA) || !this.world.bodies.includes(bodyB)) return;
                         
                         this._playSoundEffect(MERGE_SOUND_URL);
-
                         const midX = (bodyA.position.x + bodyB.position.x) / 2;
                         const midY = (bodyA.position.y + bodyB.position.y) / 2;
                         World.remove(this.world, [bodyA, bodyB]);
@@ -184,7 +290,9 @@
                 });
             }
 
-            // 게임 오버 체크
+            /**
+             * 게임 오버 조건 체크 (내부용)
+             */
             _checkGameOver() {
                 if (this.gameOver) return;
                 for (const body of Composite.allBodies(this.world)) {
@@ -200,7 +308,9 @@
                 }
             }
 
-            // 이미지, 라인 등 직접 그리기
+            /**
+             * 과일 이미지와 게임오버 라인 그리기 (내부용)
+             */
             _drawCustomElements() {
                 const context = this.render.context;
                 Composite.allBodies(this.world).forEach(body => {
@@ -228,27 +338,26 @@
                 context.setLineDash([]);
             }
 
-            // 과일 몸체 생성
+            /**
+             * 과일 물리 객체 생성 (내부용)
+             */
             _createFruitBody(x, y, level, isSleeping) {
                 const fruitData = FRUITS_DATA[level];
-                return Bodies.circle(x, y, fruitData.radius, {
-                    isSleeping,
-                    label: isSleeping ? 'fruit_indicator' : 'fruit',
-                    level,
-                    restitution: 0.2,
-                    friction: 0.5,
-                    render: { visible: false }
-                });
+                return Bodies.circle(x, y, fruitData.radius, { isSleeping, label: isSleeping ? 'fruit_indicator' : 'fruit', level, restitution: 0.2, friction: 0.5, render: { visible: false } });
             }
             
-            // 다음 과일 준비
+            /**
+             * 다음 과일 준비 (내부용)
+             */
             _addNewIndicatorFruit() {
                 const level = Math.floor(Math.random() * 5);
                 this.currentFruit = this._createFruitBody(WIDTH / 2, 50, level, true);
                 World.add(this.world, this.currentFruit);
             }
 
-            // 과일 떨어뜨리기
+            /**
+             * 현재 과일 떨어뜨리기 (내부용)
+             */
             _dropCurrentFruit() {
                 if (!this.currentFruit || this.disableAction) return;
 
@@ -260,7 +369,6 @@
                 }
                 
                 this._playSoundEffect(DROP_SOUND_URL);
-
                 this.disableAction = true;
                 Sleeping.set(this.currentFruit, false);
                 this.currentFruit.label = 'fruit';
@@ -271,19 +379,25 @@
                 }, 600);
             }
             
-            // 효과음 재생
+            /**
+             * 효과음 재생 (내부용)
+             */
             _playSoundEffect(url) {
                 const sound = new Audio(url);
                 sound.volume = 0.4;
                 sound.play().catch(e => console.error("효과음 재생 실패", e));
             }
 
-            // 점수 업데이트
+            /**
+             * 점수 UI 업데이트 (내부용)
+             */
             _updateScore() {
                 this.scoreElement.innerText = `점수: ${this.score}`;
             }
 
-            // 게임 종료 처리
+            /**
+             * 게임 종료 처리 (내부용)
+             */
             _endGame() {
                 if (this.gameOver) return;
                 this.gameOver = true;
