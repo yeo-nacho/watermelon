@@ -2,11 +2,14 @@
 // 1. 상수 선언
 // --------------------------------------------------
 const { Engine, Render, Runner, World, Bodies, Body, Events, Composite, Sleeping } = Matter;
-const WIDTH = 570, HEIGHT = 700, WALL_THICKNESS = 20, GAME_OVER_LINE = 100;
+const WIDTH = 570, HEIGHT = 600, WALL_THICKNESS = 50, GAME_OVER_LINE = 100;
 const DROP_SOUND_URL = 'music/drop.mp3', MERGE_SOUND_URL = 'music/pop.mp3';
+const CLEAR_SOUND_URL = 'music/clear.mp3'; // 반짝이는 소리
+
 const FRUITS_DATA = [
     { level: 0, radius: 20, score: 1, imgSrc: 'img/00_cherry.png' }, { level: 1, radius: 25, score: 3, imgSrc: 'img/01_strawberry.png' }, { level: 2, radius: 35, score: 6, imgSrc: 'img/02_grape.png' }, { level: 3, radius: 40, score: 10, imgSrc: 'img/03_gyool.png' }, { level: 4, radius: 50, score: 15, imgSrc: 'img/04_orange.png' }, { level: 5, radius: 60, score: 21, imgSrc: 'img/05_apple.png' }, { level: 6, radius: 70, score: 28, imgSrc: 'img/06_pear.png' }, { level: 7, radius: 80, score: 36, imgSrc: 'img/07_peach.png' }, { level: 8, radius: 90, score: 45, imgSrc: 'img/08_pineapple.png' }, { level: 9, radius: 100, score: 55, imgSrc: 'img/09_melon.png' }, { level: 10, radius: 110, score: 66, imgSrc: 'img/10_watermelon.png' },
 ];
+const MAX_FRUIT_LEVEL = FRUITS_DATA.length - 1;
 
 // --------------------------------------------------
 // 2. 게임 클래스 정의
@@ -46,17 +49,17 @@ class SuikaGame {
         this.render = Render.create({ canvas: this.canvas, engine: this.engine, options: { width: WIDTH, height: HEIGHT, wireframes: false, background: 'transparent' } });
         this.runner = Runner.create();
         
+        // ====== [핵심 수정] 벽이 보이도록 render 옵션 변경 ======
         const wallOptions = {
             isStatic: true,
             render: {
-                fillStyle: '#a2b9d1'
+                fillStyle: '#a2b9d1' // 벽 색상을 UI 테두리 색과 유사하게 설정
             }
         };
-
         World.add(this.world, [
-            Bodies.rectangle(WIDTH / 2, HEIGHT - (WALL_THICKNESS / 2), WIDTH, WALL_THICKNESS, wallOptions),
-            Bodies.rectangle(WALL_THICKNESS / 2, HEIGHT / 2, WALL_THICKNESS, HEIGHT, wallOptions),
-            Bodies.rectangle(WIDTH - (WALL_THICKNESS / 2), HEIGHT / 2, WALL_THICKNESS, HEIGHT, wallOptions),
+            Bodies.rectangle(WIDTH / 2, HEIGHT - 10, WIDTH, WALL_THICKNESS, wallOptions),
+            Bodies.rectangle(10, HEIGHT / 2, WALL_THICKNESS, HEIGHT, wallOptions),
+            Bodies.rectangle(WIDTH - 10, HEIGHT / 2, WALL_THICKNESS, HEIGHT, wallOptions),
         ]);
 
         Render.run(this.render);
@@ -72,10 +75,7 @@ class SuikaGame {
         Render.stop(this.render);
         World.clear(this.world);
         Engine.clear(this.engine);
-        this.score = 0;
-        this.gameOver = false;
-        this.disableAction = false;
-        this.currentFruit = null;
+        this.score = 0; this.gameOver = false; this.disableAction = false; this.currentFruit = null;
         this._updateScore();
         this.gameOverScreen.style.display = 'none';
         this._startGame();
@@ -97,8 +97,8 @@ class SuikaGame {
             
             const fruitData = FRUITS_DATA[this.currentFruit.level];
             const newX = Math.max(
-                WALL_THICKNESS + fruitData.radius, 
-                Math.min(correctedX, WIDTH - WALL_THICKNESS - fruitData.radius)
+                fruitData.radius + 10, 
+                Math.min(correctedX, WIDTH - fruitData.radius - 10)
             );
             Body.setPosition(this.currentFruit, { x: newX, y: this.currentFruit.position.y });
         };
@@ -129,20 +129,35 @@ class SuikaGame {
             const { bodyA, bodyB } = pair;
             if (bodyA.label === 'fruit' && bodyB.label === 'fruit' && bodyA.level === bodyB.level) {
                 const currentLevel = bodyA.level;
-                if (currentLevel >= FRUITS_DATA.length - 1 || !this.world.bodies.includes(bodyA) || !this.world.bodies.includes(bodyB)) return;
+                if (!this.world.bodies.includes(bodyA) || !this.world.bodies.includes(bodyB)) return;
                 
-                this._playSoundEffect(MERGE_SOUND_URL);
-                const midX = (bodyA.position.x + bodyB.position.x) / 2;
-                const midY = (bodyA.position.y + bodyB.position.y) / 2;
-                World.remove(this.world, [bodyA, bodyB]);
-                
-                this.score += FRUITS_DATA[currentLevel].score;
-                this._updateScore();
+                if (currentLevel === MAX_FRUIT_LEVEL) {
+                    World.remove(this.world, [bodyA, bodyB]);
+                    this._playSoundEffect(CLEAR_SOUND_URL);
+                    this.score += 1000;
+                    this._updateScore();
 
-                setTimeout(() => {
-                    const newFruit = this._createFruitBody(midX, midY, currentLevel + 1, false);
-                    World.add(this.world, newFruit);
-                }, 50);
+                    setTimeout(() => {
+                        const allOtherFruits = Composite.allBodies(this.world)
+                            .filter(body => body.label.startsWith('fruit'));
+                        World.remove(this.world, allOtherFruits);
+                    }, 100);
+
+                } 
+                else if (currentLevel < MAX_FRUIT_LEVEL) {
+                    this._playSoundEffect(MERGE_SOUND_URL);
+                    const midX = (bodyA.position.x + bodyB.position.x) / 2;
+                    const midY = (bodyA.position.y + bodyB.position.y) / 2;
+                    World.remove(this.world, [bodyA, bodyB]);
+                    
+                    this.score += FRUITS_DATA[currentLevel].score;
+                    this._updateScore();
+
+                    setTimeout(() => {
+                        const newFruit = this._createFruitBody(midX, midY, currentLevel + 1, false);
+                        World.add(this.world, newFruit);
+                    }, 50);
+                }
             }
         });
     }
@@ -177,8 +192,8 @@ class SuikaGame {
             }
         });
         context.beginPath();
-        context.moveTo(WALL_THICKNESS, GAME_OVER_LINE);
-        context.lineTo(WIDTH - WALL_THICKNESS, GAME_OVER_LINE);
+        context.moveTo(10, GAME_OVER_LINE);
+        context.lineTo(WIDTH - 10, GAME_OVER_LINE);
         context.strokeStyle = 'rgba(165, 42, 42, 0.8)';
         context.lineWidth = 4;
         context.setLineDash([10, 10]);
@@ -188,16 +203,13 @@ class SuikaGame {
 
     _createFruitBody(x, y, level, isSleeping) {
         const fruitData = FRUITS_DATA[level];
-        // ====== [핵심 수정] 과일의 기본 배경색을 다시 투명하게 만듭니다 ======
         return Bodies.circle(x, y, fruitData.radius, {
             isSleeping,
             label: isSleeping ? 'fruit_indicator' : 'fruit',
             level,
             restitution: 0.2,
             friction: 0.5,
-            render: {
-                visible: false // Matter.js의 기본 그리기를 끔
-            }
+            render: { visible: false }
         });
     }
     
