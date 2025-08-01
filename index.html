@@ -1,0 +1,233 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>수박 게임 - 과일 이미지 버전</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Mooli&display=swap" rel="stylesheet">
+    <style>
+        body { display: flex; justify-content: center; align-items: center; flex-direction: column; height: 100vh; margin: 0; background: linear-gradient(to top, #a1c4fd 0%, #c2e9fb 100%); font-family: 'Mooli', sans-serif; }
+        h1 { font-size: 3em; color: #fff; text-shadow: 2px 2px 4px rgba(0,0,0,0.3); }
+        #game-container { position: relative; border: 10px solid #8B4513; border-radius: 20px; box-shadow: 0 10px 20px rgba(0,0,0,0.3); cursor: pointer; }
+        canvas { border-radius: 10px; display: block; }
+        #score { position: absolute; top: 15px; left: 20px; font-size: 28px; font-weight: bold; color: #fff; text-shadow: 2px 2px 3px #555; z-index: 10; }
+        #game-over-text { position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%); display: none; font-size: 48px; font-weight: bold; color: white; background-color: rgba(212, 2, 2, 0.75); padding: 20px 40px; border-radius: 15px; text-align: center; pointer-events: none; }
+    </style>
+</head>
+<body>
+    <h1>수박 게임</h1>
+    <div id="game-container">
+        <canvas id="game-canvas"></canvas>
+        <div id="score">점수: 0</div>
+        <div id="game-over-text">게임 오버<br><small style="font-size: 20px;">F5를 눌러 다시 시작</small></div>
+    </div>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/matter-js/0.19.0/matter.min.js"></script>
+
+    <script>
+        const { Engine, Render, Runner, World, Bodies, Body, Events, Composite, Sleeping } = Matter;
+
+        const WIDTH = 600;
+        const HEIGHT = 750;
+        const WALL_THICKNESS = 50;
+        const GAME_OVER_LINE = 120;
+        const FPS = 60;
+        const GAME_OVER_DELAY = FPS * 1.5;
+
+        // ====== [수정됨] imgSrc 속성에 각 과일의 이미지 주소를 추가합니다 ======
+        const FRUITS_DATA = [
+            { level: 0, radius: 20, score: 1, imgSrc:    'img/00_cherry.png' },
+            { level: 1, radius: 25, score: 3, imgSrc:    'img/01_strawberry.png' },
+            { level: 2, radius: 35, score: 6, imgSrc:    'img/02_grape.png' },
+            { level: 3, radius: 40, score: 10, imgSrc:   'img/03_gyool.png' },
+            { level: 4, radius: 50, score: 15, imgSrc:   'img/04_orange.png' },
+            { level: 5, radius: 60, score: 21, imgSrc:   'img/05_apple.png' },
+            { level: 6, radius: 70, score: 28, imgSrc:   'img/06_pear.png' },
+            { level: 7, radius: 80, score: 36, imgSrc:   'img/07_peach.png' },
+            { level: 8, radius: 90, score: 45, imgSrc:   'img/08_pineapple.png' },
+            { level: 9, radius: 100, score: 55, imgSrc:  'img/09_melon.png' },
+            { level: 10, radius: 110, score: 66, imgSrc: 'img/10_watermelon.png' },
+        ];
+        const MAX_FRUIT_LEVEL = FRUITS_DATA.length - 1;
+
+        let engine, world, render, runner;
+        let score = 0;
+        let currentFruit = null;
+        let disableAction = false;
+        let gameOver = false;
+
+        // ====== [새로 추가됨] 불러온 이미지 객체를 저장할 배열 ======
+        const loadedImages = [];
+
+        const canvas = document.getElementById('game-canvas');
+        const scoreElement = document.getElementById('score');
+        const gameOverElement = document.getElementById('game-over-text');
+
+        function init() {
+            // ====== [새로 추가됨] 게임 시작 전 모든 이미지를 미리 불러옵니다 ======
+            let loadedCount = 0;
+            FRUITS_DATA.forEach((fruit, index) => {
+                const img = new Image();
+                img.src = fruit.imgSrc;
+                img.onload = () => {
+                    loadedCount++;
+                    // 모든 이미지가 로드되면 게임을 시작
+                    if (loadedCount === FRUITS_DATA.length) {
+                        startGame();
+                    }
+                };
+                loadedImages[index] = img;
+            });
+        }
+
+        function startGame() {
+            engine = Engine.create();
+            world = engine.world;
+            render = Render.create({
+                canvas: canvas,
+                engine: engine,
+                options: { width: WIDTH, height: HEIGHT, wireframes: false, background: '#F0EAD6' }
+            });
+            const wallOptions = { isStatic: true, render: { fillStyle: '#A0522D' } };
+            const ground = Bodies.rectangle(WIDTH / 2, HEIGHT - WALL_THICKNESS / 2, WIDTH, WALL_THICKNESS, wallOptions);
+            const leftWall = Bodies.rectangle(WALL_THICKNESS / 2, HEIGHT / 2, WALL_THICKNESS, HEIGHT, wallOptions);
+            const rightWall = Bodies.rectangle(WIDTH - WALL_THICKNESS / 2, HEIGHT / 2, WALL_THICKNESS, HEIGHT, wallOptions);
+            World.add(world, [ground, leftWall, rightWall]);
+
+            runner = Runner.create();
+            Render.run(render);
+            Runner.run(runner, engine);
+
+            addNewIndicatorFruit();
+            addEventListeners();
+        }
+
+        function createFruitBody(x, y, level, isSleeping) {
+            const fruitData = FRUITS_DATA[level];
+            return Bodies.circle(x, y, fruitData.radius, {
+                isSleeping: isSleeping,
+                label: isSleeping ? 'fruit_indicator' : 'fruit',
+                level: level,
+                restitution: 0.2,
+                friction: 0.5,
+                // Matter.js의 기본 렌더링은 사용하지 않음
+                render: { visible: false }
+            });
+        }
+
+        function addNewIndicatorFruit() {
+            const level = Math.floor(Math.random() * 5);
+            currentFruit = createFruitBody(WIDTH / 2, 50, level, true);
+            World.add(world, currentFruit);
+        }
+
+        function dropCurrentFruit() {
+            if (!currentFruit || disableAction) return;
+            disableAction = true;
+            Sleeping.set(currentFruit, false);
+            currentFruit.label = 'fruit';
+            currentFruit = null;
+            setTimeout(() => {
+                addNewIndicatorFruit();
+                disableAction = false;
+            }, 600);
+        }
+
+        function addEventListeners() {
+            canvas.addEventListener('click', () => { if (!gameOver) dropCurrentFruit(); });
+            canvas.addEventListener('mousemove', (event) => {
+                if (!currentFruit || !currentFruit.isSleeping || gameOver) return;
+                const bounds = canvas.getBoundingClientRect();
+                const mouseX = event.clientX - bounds.left;
+                const fruitData = FRUITS_DATA[currentFruit.level];
+                const newX = Math.max(WALL_THICKNESS + fruitData.radius, Math.min(mouseX, WIDTH - WALL_THICKNESS - fruitData.radius));
+                Body.setPosition(currentFruit, { x: newX, y: currentFruit.position.y });
+            });
+
+            Events.on(engine, 'collisionStart', (event) => {
+                event.pairs.forEach((pair) => {
+                    const { bodyA, bodyB } = pair;
+                    if (bodyA.label === 'fruit' && bodyB.label === 'fruit' && bodyA.level === bodyB.level) {
+                        const currentLevel = bodyA.level;
+                        if (currentLevel >= MAX_FRUIT_LEVEL) return;
+                        if (world.bodies.includes(bodyA) && world.bodies.includes(bodyB)) {
+                            const midX = (bodyA.position.x + bodyB.position.x) / 2;
+                            const midY = (bodyA.position.y + bodyB.position.y) / 2;
+                            World.remove(world, [bodyA, bodyB]);
+                            score += FRUITS_DATA[currentLevel].score;
+                            updateScore();
+                            const nextLevel = currentLevel + 1;
+                            setTimeout(() => {
+                                const newFruit = createFruitBody(midX, midY, nextLevel, false);
+                                World.add(world, newFruit);
+                            }, 50);
+                        }
+                    }
+                });
+            });
+
+            Events.on(engine, 'beforeUpdate', (event) => {
+                if (gameOver) return;
+                for (const body of Composite.allBodies(world)) {
+                    if (body.label === 'fruit') {
+                        if (body.position.y - body.circleRadius < GAME_OVER_LINE) {
+                            body.framesAboveLine = (body.framesAboveLine || 0) + 1;
+                        } else {
+                            body.framesAboveLine = 0;
+                        }
+                        if (body.framesAboveLine > GAME_OVER_DELAY) {
+                            endGame();
+                            break;
+                        }
+                    }
+                }
+            });
+
+            // ====== [수정됨] 렌더링 로직 전체를 이미지 그리기로 변경 ======
+            Events.on(render, 'afterRender', () => {
+                const context = render.context;
+
+                // 모든 물리 객체(과일)를 순회하며 이미지 그리기
+                Composite.allBodies(world).forEach(body => {
+                    if (body.label.startsWith('fruit')) {
+                        const img = loadedImages[body.level];
+                        const { x, y } = body.position;
+                        const angle = body.angle;
+                        const radius = body.circleRadius;
+
+                        context.save(); // 현재 캔버스 상태 저장
+                        context.translate(x, y); // 캔버스의 원점을 과일의 중심으로 이동
+                        context.rotate(angle); // 과일의 회전 각도만큼 캔버스 회전
+                        context.drawImage(img, -radius, -radius, radius * 2, radius * 2); // 과일 이미지 그리기
+                        context.restore(); // 캔버스 상태를 원래대로 복원
+                    }
+                });
+
+                // 게임 오버 라인 그리기
+                context.beginPath();
+                context.moveTo(WALL_THICKNESS, GAME_OVER_LINE);
+                context.lineTo(WIDTH - WALL_THICKNESS, GAME_OVER_LINE);
+                context.strokeStyle = 'rgba(212, 2, 2, 0.5)';
+                context.lineWidth = 4;
+                context.setLineDash([10, 10]);
+                context.stroke();
+                context.setLineDash([]);
+            });
+        }
+
+        function updateScore() { scoreElement.innerText = `점수: ${score}`; }
+        function endGame() {
+            if (gameOver) return;
+            gameOver = true;
+            gameOverElement.style.display = 'block';
+            Runner.stop(runner);
+            Render.stop(render);
+        }
+
+        // 게임 시작
+        window.onload = init;
+    </script>
+</body>
+</html>
