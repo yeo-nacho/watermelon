@@ -2,7 +2,6 @@
 // 1. 상수 선언
 // --------------------------------------------------
 const { Engine, Render, Runner, World, Bodies, Body, Events, Composite, Sleeping } = Matter;
-// ====== [수정됨] 캔버스의 내부 해상도 및 벽 두께 변경 ======
 const WIDTH = 570, HEIGHT = 600, WALL_THICKNESS = 10, GAME_OVER_LINE = 100;
 const DROP_SOUND_URL = 'music/drop.mp3', MERGE_SOUND_URL = 'music/pop.mp3';
 const CLEAR_SOUND_URL = 'music/clear.mp3';
@@ -88,15 +87,17 @@ class SuikaGame {
             this.muteButton.textContent = this.bgm.muted ? '🔇' : '🎵';
         };
         
+        // ====== [수정] 마우스와 터치 이동 이벤트를 모두 처리하는 함수 ======
         const handleMove = (event) => {
             if (!this.currentFruit || !this.currentFruit.isSleeping || this.gameOver) return;
+            
+            // 터치 이벤트와 마우스 이벤트를 구분하여 clientX 좌표를 얻음
             const clientX = event.type.includes('touch') ? event.touches[0].clientX : event.clientX;
             const canvasBounds = this.canvasContainer.getBoundingClientRect();
             const correctedX = (clientX - canvasBounds.left) / this.scale;
             
             const fruitData = FRUITS_DATA[this.currentFruit.level];
             
-            // ====== [핵심 수정] 과일이 벽을 넘지 않도록 이동 범위를 정확하게 제한 ======
             const newX = Math.max(
                 WALL_THICKNESS + fruitData.radius, 
                 Math.min(correctedX, WIDTH - WALL_THICKNESS - fruitData.radius)
@@ -104,10 +105,22 @@ class SuikaGame {
             Body.setPosition(this.currentFruit, { x: newX, y: this.currentFruit.position.y });
         };
         
-        this.canvasContainer.onclick = () => { if (!this.gameOver) this._dropCurrentFruit(); };
+        // ====== [추가] 마우스 클릭 또는 터치 종료 시 과일을 떨어뜨리는 함수 ======
+        const handleEnd = (event) => {
+            event.preventDefault(); // 기본 동작(더블탭 확대 등) 방지
+            if (!this.gameOver) {
+                this._dropCurrentFruit();
+            }
+        };
+
+        // 마우스 이벤트 리스너
         this.canvasContainer.onmousemove = handleMove;
-        this.canvasContainer.ontouchstart = (e) => e.preventDefault();
-        this.canvasContainer.ontouchmove = (e) => { e.preventDefault(); handleMove(e); };
+        this.canvasContainer.onclick = handleEnd; // 기존 onclick을 handleEnd로 대체
+
+        // ====== [추가] 모바일 터치 이벤트 리스너 ======
+        this.canvasContainer.ontouchstart = (e) => e.preventDefault(); // 스크롤 등 기본 동작 방지
+        this.canvasContainer.ontouchmove = handleMove;
+        this.canvasContainer.ontouchend = handleEnd; // 터치가 끝나면 과일 떨어뜨리기
 
         Events.on(this.engine, 'collisionStart', (event) => this._handleCollision(event));
         Events.on(this.engine, 'beforeUpdate', () => this._checkGameOver());
