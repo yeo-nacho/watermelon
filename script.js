@@ -65,7 +65,8 @@ class SuikaGame {
         
         this._addEventListeners();
         this._addNewIndicatorFruit();
-        this._resizeGame();
+        
+        setTimeout(() => this._resizeGame(), 100);
     }
 
     _restartGame() {
@@ -81,23 +82,31 @@ class SuikaGame {
 
     _addEventListeners() {
         window.onresize = () => this._resizeGame();
+
+        // ====== [핵심 수정] 모바일 터치(ontouchend) 이벤트를 명시적으로 추가합니다. ======
         this.restartButton.onclick = () => this._restartGame();
-        this.muteButton.onclick = () => {
+        this.restartButton.ontouchend = (e) => {
+            e.preventDefault(); // ontouchend 후 onclick이 중복 실행되는 것을 방지
+            this._restartGame();
+        };
+
+        const toggleMute = () => {
             this.bgm.muted = !this.bgm.muted;
             this.muteButton.textContent = this.bgm.muted ? '🔇' : '🎵';
         };
+
+        this.muteButton.onclick = toggleMute;
+        this.muteButton.ontouchend = (e) => {
+            e.preventDefault(); // 중복 실행 방지
+            toggleMute();
+        };
         
-        // ====== [수정] 마우스와 터치 이동 이벤트를 모두 처리하는 함수 ======
         const handleMove = (event) => {
             if (!this.currentFruit || !this.currentFruit.isSleeping || this.gameOver) return;
-            
-            // 터치 이벤트와 마우스 이벤트를 구분하여 clientX 좌표를 얻음
             const clientX = event.type.includes('touch') ? event.touches[0].clientX : event.clientX;
             const canvasBounds = this.canvasContainer.getBoundingClientRect();
             const correctedX = (clientX - canvasBounds.left) / this.scale;
-            
             const fruitData = FRUITS_DATA[this.currentFruit.level];
-            
             const newX = Math.max(
                 WALL_THICKNESS + fruitData.radius, 
                 Math.min(correctedX, WIDTH - WALL_THICKNESS - fruitData.radius)
@@ -105,22 +114,16 @@ class SuikaGame {
             Body.setPosition(this.currentFruit, { x: newX, y: this.currentFruit.position.y });
         };
         
-        // ====== [추가] 마우스 클릭 또는 터치 종료 시 과일을 떨어뜨리는 함수 ======
         const handleEnd = (event) => {
-            event.preventDefault(); // 기본 동작(더블탭 확대 등) 방지
-            if (!this.gameOver) {
-                this._dropCurrentFruit();
-            }
+            event.preventDefault();
+            if (!this.gameOver) this._dropCurrentFruit();
         };
 
-        // 마우스 이벤트 리스너
         this.canvasContainer.onmousemove = handleMove;
-        this.canvasContainer.onclick = handleEnd; // 기존 onclick을 handleEnd로 대체
-
-        // ====== [추가] 모바일 터치 이벤트 리스너 ======
-        this.canvasContainer.ontouchstart = (e) => e.preventDefault(); // 스크롤 등 기본 동작 방지
+        this.canvasContainer.onclick = handleEnd;
+        this.canvasContainer.ontouchstart = (e) => e.preventDefault();
         this.canvasContainer.ontouchmove = handleMove;
-        this.canvasContainer.ontouchend = handleEnd; // 터치가 끝나면 과일 떨어뜨리기
+        this.canvasContainer.ontouchend = handleEnd;
 
         Events.on(this.engine, 'collisionStart', (event) => this._handleCollision(event));
         Events.on(this.engine, 'beforeUpdate', () => this._checkGameOver());
@@ -150,23 +153,18 @@ class SuikaGame {
                     this._playSoundEffect(CLEAR_SOUND_URL);
                     this.score += 1000;
                     this._updateScore();
-
                     setTimeout(() => {
-                        const allOtherFruits = Composite.allBodies(this.world)
-                            .filter(body => body.label.startsWith('fruit'));
+                        const allOtherFruits = Composite.allBodies(this.world).filter(body => body.label.startsWith('fruit'));
                         World.remove(this.world, allOtherFruits);
                     }, 100);
-
                 } 
                 else if (currentLevel < MAX_FRUIT_LEVEL) {
                     this._playSoundEffect(MERGE_SOUND_URL);
                     const midX = (bodyA.position.x + bodyB.position.x) / 2;
                     const midY = (bodyA.position.y + bodyB.position.y) / 2;
                     World.remove(this.world, [bodyA, bodyB]);
-                    
                     this.score += FRUITS_DATA[currentLevel].score;
                     this._updateScore();
-
                     setTimeout(() => {
                         const newFruit = this._createFruitBody(midX, midY, currentLevel + 1, false);
                         World.add(this.world, newFruit);
